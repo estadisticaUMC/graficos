@@ -3,6 +3,7 @@ library(readxl)
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
+# cambios
 
 graf01<-function(base,curso,grado,nivel,guardar){
   

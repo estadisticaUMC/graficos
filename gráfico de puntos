@@ -1,0 +1,215 @@
+library(foreign)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+
+graf02<-function(base,curso,grado,nivel,guardar){
+  if(nivel=='nacional'){
+    bd1<-base[base$curso==curso & base$est==nivel,]
+    bd1<-bd1[order(bd1$tiempo),]
+    bd1$orden<-seq(1,length(bd1$est2))
+    
+    bd0<-bd1[bd1$orden==max(bd1$orden) | bd1$orden==max(bd1$orden)-1,]
+    
+    bda1<-bd0 %>% select(tiempo,MP); bda1<-data.frame(t(bda1)); colnames(bda1)<-c('med_1','med_2'); bda1<-bda1[-1,]
+    bda2<-bd0 %>% select(tiempo,ee_MP); bda2<-data.frame(t(bda2)); colnames(bda2)<-c('ee_1','ee_2'); bda2<-bda2[-1,]
+    bda1<-cbind(bda1,bda2)
+    
+    ### Calcular la significacia
+    bda1$zm<-ifelse(!is.na(bda1$ee_2)==0,(bda1$med_1-bda1$med_2)/sqrt((bda1$ee_1)^2),(bda1$med_1-bda1$med_2)/sqrt((bda1$ee_1)^2+(bda1$ee_2)^2))
+    bda1$valor_p<-ifelse(bda1$zm<0,2*pnorm(bda1$zm,mean=0,sd=1),2*(1-pnorm(bda1$zm,mean=0,sd=1)))
+    bda1$sig<-ifelse(bda1$valor_p<0.05,1,0)
+    
+    bda1<-bda1 %>% select(med_1,med_2,sig)
+    # n1<-bda1 %>% select(med_1,sig); colnames(n1)<-c('med','sig'); n1$orden<-1
+    n2<-bda1 %>% select(med_2,sig); colnames(n2)<-c('med','sig'); n2$orden<-max(bd1$orden)
+    
+    bd0<-bd1[bd1$orden!=max(bd1$orden),]
+    bda5<-bd0 %>% select(MP,orden); colnames(bda5)<-c('med','orden'); bda5$sig<-0
+    MP<-rbind(bda5,n2)
+    
+    MP$et<-as.character(round2(MP$med,0))
+    MP$et<-ifelse(MP$sig==1,str_c(MP$et,'*'),MP$et)
+    
+    ## Puntos de corte  
+      if (grado=='4P') {
+        if(curso=='Lec'){
+          pc=c(356.92,444.72,522.03)
+        }else{
+          pc=c(351.90,422.21,526.46)
+        }
+      } else if (grado=='6P') {
+        if(curso=='Lec'){
+          pc=c(445.46,522.17,579.14)
+        }else{
+          pc=c(432.32,526.61,603.41)
+        }
+      } else{
+        if(curso=='Lec'){
+          pc=c(505.14,580.61,641.25)
+        } else if (curso=='Mat'){
+          pc=c(519.67,595.96,649.38)
+        } else {
+          pc=c(374.6,509.58,628.48)
+        }
+      }
+    
+    grafico<-ggplot(data=MP,aes(x=orden,y=med))+
+      annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[1],yend=pc[1],color='#A74D4B',size=0.5)+
+      annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[2],yend=pc[2],color='#F79646',size=0.5)+
+      annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[3],yend=pc[3],color='#9BBB59',size=0.5)+
+      geom_point(pch=16,color='#00CED1',size=4)+
+      geom_line(color='#00CED1',size=1)+
+      geom_text(data=MP,aes(y=med+15,label=et),size=5.5,col='#333333')+
+      annotate('text',x=MP$orden,y=pc[1]-110,label=bd1$tiempo,color='#333333',hjust=0.5,size=5.5)+
+      annotate('text',x=0.3,y=pc,label=round2(pc,0),color='#333333',hjust=0.5,size=5.5)+
+      annotate('text',x=nrow(MP)+0.71,y=(pc[1]-100+pc[1])/2,label='Previo al inicio',color='#A6A6A6',hjust=0.5,size=5)+
+      annotate('text',x=nrow(MP)+0.84,y=(pc[1]+pc[2])/2,label="En inicio",color='#A74D4B',hjust=0.5,size=5)+
+      annotate('text',x=nrow(MP)+0.78,y=(pc[2]+pc[3])/2,label="En proceso",color='#F79646',hjust=0.5,size=5)+
+      annotate('text',x=nrow(MP)+0.76,y=(pc[3]+pc[3]+100)/2,label="Satisfactorio",color='#9BBB59',hjust=0.5,size=5)+
+      theme(axis.title=element_blank(),
+            panel.grid=element_blank(),
+            panel.background=element_rect(fill='transparent'),
+            plot.background=element_rect(fill='transparent',color='transparent'),
+            axis.ticks=element_blank(),
+            axis.text=element_blank())
+    print(grafico)
+    
+    if (length(bd1$est2)<5) {
+      ggsave(paste(guardar,grado,'_',curso,'_MP_Nac.png'),
+             grafico,
+             bg='transparent',
+             width=7,
+             height=6,
+             dpi=1000)
+    } else {
+      ggsave(paste(guardar,grado,'_',curso,'_MP_Nac.png'),
+             grafico,
+             bg='transparent',
+             width=12,
+             height=7,
+             dpi=1000)
+    }
+   
+  } else {
+    bd1<-base[base$curso==curso & base$est==nivel,]
+    bd1$orden<-seq(1,length(bd1$est2))
+    
+    if (length(bd1$est2)==7){
+      bd1$orden<-ifelse(bd1$est1=='Gestión y área',8,bd1$orden)
+      aux<-bd1[bd1$est2=='Privado',]; aux$orden<-7
+      bd1<-rbind(bd1,aux)
+      
+      MP<-bd1 %>% select(est1,est2,MP,ee_MP,orden); colnames(MP)<-c('est1','est2','med','ee','orden'); MP$NL<-'MP'
+      
+      n1<-MP[MP$orden==1 | MP$orden==3 | MP$orden==5 | MP$orden==7,]
+      n2<-MP[MP$orden==2 | MP$orden==4 | MP$orden==6 | MP$orden==8,]
+    }else{
+      MP<-bd1 %>% select(est1,est2,MP,ee_MP,orden); colnames(MP)<-c('est1','est2','med','ee','orden'); MP$NL<-'MP'
+      
+      n1<-MP[MP$orden==1 | MP$orden==3 | MP$orden==5,]
+      n2<-MP[MP$orden==2 | MP$orden==4 | MP$orden==6,]
+    }
+    
+    ### Calcular la significacia
+    zm<-ifelse(!is.na(n1$ee)==0,(n1$med-n2$med)/sqrt((n1$ee)^2),(n1$med-n2$med)/sqrt((n1$ee)^2+(n2$ee)^2))
+    valor_p<-ifelse(zm<0,2*pnorm(zm,mean=0,sd=1),2*(1-pnorm(zm,mean=0,sd=1)))
+    sig<-ifelse(valor_p<0.05,1,0)
+    
+    n2<-cbind(n2,sig); n2<-n2 %>% select(orden,sig)
+    MP<-merge(MP,n2,by='orden',all.x=TRUE)
+    MP$sig<-ifelse(!is.na(MP$sig)==0,0,MP$sig)
+    
+    MP$et<-as.character(round2(MP$med,0))
+    MP$et<-ifelse(MP$sig==1,str_c(MP$et,'*'),MP$et)
+    
+    ## Puntos de corte  
+    if (grado=='4P') {
+      if(curso=='Lec'){
+        pc=c(356.92,444.72,522.03)
+      }else{
+        pc=c(351.90,422.21,526.46)
+      }
+    } else if (grado=='6P') {
+      if(curso=='Lec'){
+        pc=c(445.46,522.17,579.14)
+      }else{
+        pc=c(432.32,526.61,603.41)
+      }
+    } else{
+      if(curso=='Lec'){
+        pc=c(505.14,580.61,641.25)
+      } else if (curso=='Mat'){
+        pc=c(519.67,595.96,649.38)
+      } else {
+        pc=c(374.6,509.58,628.48)
+      }
+    }
+    
+    niv<-bd1 %>% select(orden,est2); niv$est2<-ifelse(niv$est2=='Público urbano','Público\nurbano',niv$est2)
+    aux<-unique(bd1$est1)
+    niv1<-data.frame(orden=c(1,seq(2.5,length(bd1$est2),by=2)),estrato=aux)
+    
+    if(length(bd1$est2)==6) {
+      grafico<-ggplot(data=MP,aes(x=orden,y=med))+
+        annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[1],yend=pc[1],color='#A74D4B',size=0.5)+
+        annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[2],yend=pc[2],color='#F79646',size=0.5)+
+        annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[3],yend=pc[3],color='#9BBB59',size=0.5)+
+        geom_point(pch=16,color='#00CED1',size=4)+
+        geom_text(data=MP,aes(y=med+15,label=et),size=5.5,col='#333333')+
+        annotate('text',x=niv$orden,y=pc[1]-110,label=niv$est2,color='#333333',hjust=0.5,size=5.5)+
+        annotate('text',x=0.3,y=pc,label=round2(pc,0),color='#333333',hjust=0.5,size=5.5)+
+        geom_segment(x=2.5,xend=2.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=4.5,xend=4.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
+        annotate('text',x=nrow(MP)+0.71,y=(pc[1]-100+pc[1])/2,label='Previo al inicio',color='#A6A6A6',hjust=0.5,size=5)+
+        annotate('text',x=nrow(MP)+0.84,y=(pc[1]+pc[2])/2,label="En inicio",color='#A74D4B',hjust=0.5,size=5)+
+        annotate('text',x=nrow(MP)+0.78,y=(pc[2]+pc[3])/2,label="En proceso",color='#F79646',hjust=0.5,size=5)+
+        annotate('text',x=nrow(MP)+0.76,y=(pc[3]+pc[3]+100)/2,label="Satisfactorio",color='#9BBB59',hjust=0.5,size=5)+
+        theme(axis.title=element_blank(),
+              panel.grid=element_blank(),
+              panel.background=element_rect(fill='transparent'),
+              plot.background=element_rect(fill='transparent',color='transparent'),
+              axis.ticks=element_blank(),
+              axis.text=element_blank())
+      print(grafico)
+      
+      ggsave(paste(guardar,grado,'_',curso,'_MP_estratos.png'),
+             grafico,
+             bg='transparent',
+             width=12,
+             height=7,
+             dpi=1000)
+    } else {
+      grafico<-ggplot(data=MP,aes(x=orden,y=med))+
+        annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[1],yend=pc[1],color='#A74D4B',size=0.5)+
+        annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[2],yend=pc[2],color='#F79646',size=0.5)+
+        annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[3],yend=pc[3],color='#9BBB59',size=0.5)+
+        geom_point(pch=16,color='#00CED1',size=4)+
+        geom_text(data=MP,aes(y=med+15,label=et),size=5.5,col='#333333')+
+        annotate('text',x=niv$orden,y=pc[1]-110,label=niv$est2,color='#333333',hjust=0.5,size=5.5)+
+        annotate('text',x=0.3,y=pc,label=round2(pc,0),color='#333333',hjust=0.5,size=5.5)+
+        geom_segment(x=2.5,xend=2.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=4.5,xend=4.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=6.5,xend=6.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
+        annotate('text',x=nrow(MP)+0.71,y=(pc[1]-100+pc[1])/2,label='Previo al inicio',color='#A6A6A6',hjust=0.5,size=5)+
+        annotate('text',x=nrow(MP)+0.84,y=(pc[1]+pc[2])/2,label="En inicio",color='#A74D4B',hjust=0.5,size=5)+
+        annotate('text',x=nrow(MP)+0.78,y=(pc[2]+pc[3])/2,label="En proceso",color='#F79646',hjust=0.5,size=5)+
+        annotate('text',x=nrow(MP)+0.76,y=(pc[3]+pc[3]+100)/2,label="Satisfactorio",color='#9BBB59',hjust=0.5,size=5)+
+        theme(axis.title=element_blank(),
+              panel.grid=element_blank(),
+              panel.background=element_rect(fill='transparent'),
+              plot.background=element_rect(fill='transparent',color='transparent'),
+              axis.ticks=element_blank(),
+              axis.text=element_blank())
+      print(grafico)
+      
+      ggsave(paste(guardar,grado,'_',curso,'_MP_estratos.png'),
+             grafico,
+             bg='transparent',
+             width=12,
+             height=7,
+             dpi=1000)
+    }
+  }
+}

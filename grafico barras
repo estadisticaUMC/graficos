@@ -3,10 +3,9 @@ library(readxl)
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
-# cambios
+
 
 graf01<-function(base,curso,grado,nivel,guardar){
-  
   if(nivel=='nacional'){
     bd1<-base[base$curso==curso & base$est==nivel,]
     bd1<-bd1[order(bd1$tiempo),]
@@ -142,7 +141,6 @@ graf01<-function(base,curso,grado,nivel,guardar){
              height=7,
              dpi=1000)
     }
-    
     }else{
     bd0<-base[base$curso==curso & base$tiempo==max(base$tiempo) & base$est1=='Nacional',]
     bd1<-base[base$curso==curso & base$est==nivel,]

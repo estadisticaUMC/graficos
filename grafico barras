@@ -1,0 +1,303 @@
+library(foreign)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+
+graf01<-function(base,curso,grado,nivel,guardar){
+  
+  if(nivel=='nacional'){
+    bd1<-base[base$curso==curso & base$est==nivel,]
+    bd1<-bd1[order(bd1$tiempo),]
+    bd1$orden<-seq(1,length(bd1$est2))
+    
+    bd0<-bd1[bd1$orden==max(bd1$orden) | bd1$orden==max(bd1$orden)-1,]
+    
+    bda1<-bd0 %>% select(tiempo,PI,I,P,S,MP); bda1<-data.frame(t(bda1)); colnames(bda1)<-c('med_1','med_2'); bda1<-bda1[-1,]
+    bda1$NL<-c('PI','I','P','S','MP')
+    bda2<-bd0 %>% select(tiempo,ee_PI,ee_I,ee_P,ee_S,ee_MP); bda2<-data.frame(t(bda2)); colnames(bda2)<-c('ee_1','ee_2'); bda2<-bda2[-1,]
+    bda2$NL<-c('PI','I','P','S','MP')
+    bda1<-merge(bda1,bda2,by='NL')
+    
+    ### Calcular la significacia
+    bda1$zm<-ifelse(!is.na(bda1$ee_2)==0,(bda1$med_1-bda1$med_2)/sqrt((bda1$ee_1)^2),(bda1$med_1-bda1$med_2)/sqrt((bda1$ee_1)^2+(bda1$ee_2)^2))
+    bda1$valor_p<-ifelse(bda1$zm<0,2*pnorm(bda1$zm,mean=0,sd=1),2*(1-pnorm(bda1$zm,mean=0,sd=1)))
+    bda1$sig<-ifelse(bda1$valor_p<0.05,1,0)
+    
+    bda1<-bda1 %>% select(NL,med_1,med_2,sig)
+    n2<-bda1 %>% select(NL,med_2,sig); colnames(n2)<-c('NL','med','sig'); n2$orden<-max(bd1$orden)
+    
+    bd0<-bd1[bd1$orden!=max(bd1$orden),]
+    bda1<-bd0 %>% select(PI,orden); colnames(bda1)<-c('med','orden'); bda1$sig<-0; bda1$NL<-'PI'
+    bda2<-bd0 %>% select(P,orden); colnames(bda2)<-c('med','orden'); bda2$sig<-0; bda2$NL<-'P'
+    bda3<-bd0 %>% select(I,orden); colnames(bda3)<-c('med','orden'); bda3$sig<-0; bda3$NL<-'I'
+    bda4<-bd0 %>% select(S,orden); colnames(bda4)<-c('med','orden'); bda4$sig<-0; bda4$NL<-'S'
+    bda5<-bd0 %>% select(MP,orden); colnames(bda5)<-c('med','orden'); bda5$sig<-0; bda5$NL<-'MP'
+    NL<-rbind(bda1,bda2,bda3,bda4,bda5,n2)
+    
+    MP<-NL %>% filter(NL=='MP')
+    MP$et<-as.character(round2(MP$med,0))
+    MP$et<-ifelse(MP$sig==1,str_c(MP$et,'*'),MP$et)
+    
+    NL<-NL %>% filter(NL!='MP')
+    NL$et<-sprintf(' %0.1f',round2(NL$med,1))
+    NL$et<-as.character(sub('.', ',', sub(',', ' ',NL$et,fixed=TRUE),fixed=TRUE))
+    NL$et<-ifelse(NL$sig==1,str_c(NL$et,'*'),NL$et)
+    
+    NL$color<-ifelse(NL$NL=='I','#FFFFFF','#333333')
+    
+    NL$Val<-ifelse(NL$NL=='S',NL$med,-1*NL$med)
+    
+    NL$pos1<-0.5*NL$Val
+    P<-NL[NL$NL=='P',]; P<-P %>% select(orden,Val); colnames(P)<-c('orden','pos2')
+    I<-NL[NL$NL=='I',]; I<-I %>% select(orden,Val); colnames(I)<-c('orden','pos3')
+    NL<-merge(NL,P,by='orden')
+    NL<-merge(NL,I,by='orden')
+    NL$pos_f<-ifelse(NL$NL=='S'|NL$NL=='P',NL$pos1,ifelse(NL$NL=='I',
+                                                          NL$pos1+NL$pos2,NL$pos1+NL$pos2+NL$pos3))
+    NL<-NL %>% select(orden,NL,med,et,color,Val,pos_f)
+    
+    NL$NL<-factor(NL$NL,levels=c('PI','I','P','S'),labels=c('Previo al inicio','En inicio',
+                                                            'En proceso','Satisfactorio'))
+    
+    b1<-NL[NL$NL=='Satisfactorio',]
+    b2<-NL[NL$NL=='En proceso',]
+    b3<-NL[NL$NL=='En inicio',]
+    b4<-NL[NL$NL=='Previo al inicio',]
+    
+    niv<-data.frame(orden=unique(NL$orden),tiempo=unique(bd1$tiempo))
+    d<-max(bd1$S); e<-min(bd1$S)
+    eje<-data.frame(et=c('Medida\n promedio','Niveles de logro'))
+    b<-max(NL$orden)
+    
+    if (length(bd1$est2)<5) {
+      grafico<-ggplot(data=NL,aes(x=orden,y=Val))+
+        geom_bar(aes(fill=NL),stat='identity',width=0.3)+
+        geom_text(data=MP,aes(y=d+40,label=et),size=5,col='#333333',position=position_stack(vjust=0.9))+
+        geom_text(data=b4,aes(y=ifelse(Val>-7,-8+pos_f,pos_f),label=et),size=5,col=b4$color)+
+        geom_text(data=b3,aes(y=pos_f,label=et),size=5,col=b3$color)+
+        geom_text(data=b2,aes(y=pos_f,label=et),size=5,col=b2$color)+
+        geom_text(data=b1,aes(y=ifelse(Val<6,8+pos_f,pos_f),label=et),size=5,col=b1$color)+
+        scale_fill_manual(values=c('#A5A5A5','#A74D4B','#F79646','#9BBB59'),
+                          guide=guide_legend(reverse=FALSE))+
+        geom_segment(x=1-0.3/2-0.02,xend=b+0.3/2+0.02,y=0,yend=0,color='#000000',size=0.3)+
+        geom_text(data=niv,aes(x=orden,y=-(100-e)-25),label=niv$tiempo,size=4.5,col='#333333')+
+        geom_text(data=eje,aes(x=1-0.3/2-0.3,y=c(d+35,(d+40-(100-e)-25)/2)),label=eje$et,size=4,angle=c(0,90),col='#333333')+
+        theme(axis.title=element_blank(),
+              text=element_text(size=18,color='#333333'),
+              legend.title=element_blank(),
+              legend.position='bottom',
+              legend.direction='horizontal',
+              legend.spacing.x=unit(0.2,'cm'),
+              legend.background=element_blank(),
+              axis.ticks=element_blank(),
+              axis.text=element_blank(),
+              panel.grid=element_blank(),
+              strip.text=element_blank(),
+              strip.background=element_rect(fill='transparent',color=NA),
+              panel.background=element_rect(fill='transparent'),
+              plot.background=element_rect(fill='transparent',color='transparent'))
+      print(grafico)
+      
+      ggsave(paste(guardar,grado,'_',curso,'_Nac.png'),
+             grafico,
+             bg='transparent',
+             width=7,
+             height=6,
+             dpi=1000)
+    } else {
+      grafico<-ggplot(data=NL,aes(x=orden,y=Val))+
+        geom_bar(aes(fill=NL),stat='identity',width=0.5)+
+        geom_text(data=MP,aes(y=d+40,label=et),size=5,col='#333333',position=position_stack(vjust=0.9))+
+        geom_text(data=b4,aes(y=ifelse(Val>-7,-8+pos_f,pos_f),label=et),size=5,col=b4$color)+
+        geom_text(data=b3,aes(y=pos_f,label=et),size=5,col=b3$color)+
+        geom_text(data=b2,aes(y=pos_f,label=et),size=5,col=b2$color)+
+        geom_text(data=b1,aes(y=ifelse(Val<6,8+pos_f,pos_f),label=et),size=5,col=b1$color)+
+        scale_fill_manual(values=c('#A5A5A5','#A74D4B','#F79646','#9BBB59'),
+                          guide=guide_legend(reverse=FALSE))+
+        geom_segment(x=1-0.5/2-0.02,xend=b+0.5/2+0.02,y=0,yend=0,color='#000000',size=0.3)+
+        geom_text(data=niv,aes(x=orden,y=-(100-e)-25),label=niv$tiempo,size=4.5,col='#333333')+
+        geom_text(data=eje,aes(x=1-0.5/2-0.5,y=c(d+35,(d+40-(100-e)-25)/2)),label=eje$et,size=4,angle=c(0,90),col='#333333')+
+        theme(axis.title=element_blank(),
+              text=element_text(size=14,color='#333333'),
+              legend.title=element_blank(),
+              legend.position='bottom',
+              legend.direction='horizontal',
+              legend.spacing.x=unit(0.2,'cm'),
+              legend.background=element_blank(),
+              axis.ticks=element_blank(),
+              axis.text=element_blank(),
+              panel.grid=element_blank(),
+              strip.text=element_blank(),
+              strip.background=element_rect(fill='transparent',color=NA),
+              panel.background=element_rect(fill='transparent'),
+              plot.background=element_rect(fill='transparent',color='transparent'))
+      print(grafico)
+      
+      ggsave(paste(guardar,grado,'_',curso,'_Nac.png'),
+             grafico,
+             bg='transparent',
+             width=12,
+             height=7,
+             dpi=1000)
+    }
+    
+    }else{
+    bd0<-base[base$curso==curso & base$tiempo==max(base$tiempo) & base$est1=='Nacional',]
+    bd1<-base[base$curso==curso & base$est==nivel,]
+    bd1<-rbind(bd0,bd1); bd1$orden<-seq(1,length(bd1$est2))
+    if (length(bd1$est2)!=7){
+      bd1$orden<-ifelse(bd1$est1=='Gestión y área',9,bd1$orden)
+      aux<-bd1[bd1$est2=='Privado',]; aux$orden<-8
+      bd1<-rbind(bd1,aux)
+      
+      bda1<-bd1 %>% select(est1,est2,PI,ee_PI,orden); colnames(bda1)<-c('est1','est2','med','ee','orden'); bda1$NL<-'PI'
+      bda2<-bd1 %>% select(est1,est2,I,ee_I,orden); colnames(bda2)<-c('est1','est2','med','ee','orden'); bda2$NL<-'I'
+      bda3<-bd1 %>% select(est1,est2,P,ee_P,orden); colnames(bda3)<-c('est1','est2','med','ee','orden'); bda3$NL<-'P'
+      bda4<-bd1 %>% select(est1,est2,S,ee_S,orden); colnames(bda4)<-c('est1','est2','med','ee','orden'); bda4$NL<-'S'
+      bda5<-bd1 %>% select(est1,est2,MP,ee_MP,orden); colnames(bda5)<-c('est1','est2','med','ee','orden'); bda5$NL<-'MP'
+      NL<-rbind(bda1,bda2,bda3,bda4,bda5)
+      
+      n1<-NL[NL$orden==2 | NL$orden==4 | NL$orden==6 | NL$orden==8,]
+      n2<-NL[NL$orden==3 | NL$orden==5 | NL$orden==7 | NL$orden==9,]
+    }else{
+      bda1<-bd1 %>% select(est1,est2,PI,ee_PI,orden); colnames(bda1)<-c('est1','est2','med','ee','orden'); bda1$NL<-'PI'
+      bda2<-bd1 %>% select(est1,est2,I,ee_I,orden); colnames(bda2)<-c('est1','est2','med','ee','orden'); bda2$NL<-'I'
+      bda3<-bd1 %>% select(est1,est2,P,ee_P,orden); colnames(bda3)<-c('est1','est2','med','ee','orden'); bda3$NL<-'P'
+      bda4<-bd1 %>% select(est1,est2,S,ee_S,orden); colnames(bda4)<-c('est1','est2','med','ee','orden'); bda4$NL<-'S'
+      bda5<-bd1 %>% select(est1,est2,MP,ee_MP,orden); colnames(bda5)<-c('est1','est2','med','ee','orden'); bda5$NL<-'MP'
+      NL<-rbind(bda1,bda2,bda3,bda4,bda5)
+      
+      n1<-NL[NL$orden==2 | NL$orden==4 | NL$orden==6,]
+      n2<-NL[NL$orden==3 | NL$orden==5 | NL$orden==7,]
+    }
+    
+    ### Calcular la significacia
+    zm<-ifelse(!is.na(n1$ee)==0,(n1$med-n2$med)/sqrt((n1$ee)^2),(n1$med-n2$med)/sqrt((n1$ee)^2+(n2$ee)^2))
+    valor_p<-ifelse(zm<0,2*pnorm(zm,mean=0,sd=1),2*(1-pnorm(zm,mean=0,sd=1)))
+    sig<-ifelse(valor_p<0.05,1,0)
+    
+    n2<-cbind(n2,sig); n2<-n2 %>% select(est2,NL,orden,sig)
+    NL<-merge(NL,n2,by=c('est2','NL','orden'),all.x=TRUE)
+    NL$sig<-ifelse(!is.na(NL$sig)==0,0,NL$sig)
+    
+    MP<-NL %>% filter(NL=='MP')
+    MP$et<-as.character(round2(MP$med,0))
+    MP$et<-ifelse(MP$sig==1,str_c(MP$et,'*'),MP$et)
+    
+    NL<-NL %>% filter(NL!='MP')
+    NL$et<-sprintf(' %0.1f',round2(NL$med,1))
+    NL$et<-as.character(sub('.', ',', sub(',', ' ',NL$et,fixed=TRUE),fixed=TRUE))
+    NL$et<-ifelse(NL$sig==1,str_c(NL$et,'*'),NL$et)
+    
+    NL$color<-ifelse(NL$NL=='I','#FFFFFF','#333333')
+    
+    NL$Val<-ifelse(NL$NL=='S',NL$med,-1*NL$med)
+    
+    NL$pos1<-0.5*NL$Val
+    P<-NL[NL$NL=='P',]; P<-P %>% select(orden,Val); colnames(P)<-c('orden','pos2')
+    I<-NL[NL$NL=='I',]; I<-I %>% select(orden,Val); colnames(I)<-c('orden','pos3')
+    NL<-merge(NL,P,by='orden')
+    NL<-merge(NL,I,by='orden')
+    NL$pos_f<-ifelse(NL$NL=='S'|NL$NL=='P',NL$pos1,ifelse(NL$NL=='I',
+                                                          NL$pos1+NL$pos2,NL$pos1+NL$pos2+NL$pos3))
+    NL<-NL %>% select(orden,est1,est2,NL,med,et,color,Val,pos_f)
+    
+    NL$NL<-factor(NL$NL,levels=c('PI','I','P','S'),labels=c('Previo al inicio','En inicio',
+                                                            'En proceso','Satisfactorio'))
+    
+    b1<-NL[NL$NL=='Satisfactorio',]
+    b2<-NL[NL$NL=='En proceso',]
+    b3<-NL[NL$NL=='En inicio',]
+    b4<-NL[NL$NL=='Previo al inicio',]
+    
+    niv<-bd1 %>% select(orden,est2); niv$est2<-ifelse(niv$est2=='Público urbano','Público\nurbano',niv$est2)
+    aux<-unique(bd1$est1)
+    niv1<-data.frame(orden=c(1,seq(2.5,length(bd1$est2),by=2)),estrato=aux)
+    d<-max(bd1$S); e<-min(bd1$S)
+    eje<-data.frame(et=c('Medida\n promedio','Niveles de logro'))
+    b<-max(NL$orden)
+    
+    if (length(bd1$est2)==7){
+      grafico<-ggplot(data=NL,aes(x=orden,y=Val))+
+        geom_bar(aes(fill=NL),stat='identity',width=0.5)+
+        geom_text(data=MP,aes(y=d+40,label=et),size=5,col='#333333',position=position_stack(vjust=0.9))+
+        geom_text(data=b4,aes(y=ifelse(Val>-7,-8+pos_f,pos_f),label=et),size=5,col=b4$color)+
+        geom_text(data=b3,aes(y=pos_f,label=et),size=5,col=b3$color)+
+        geom_text(data=b2,aes(y=pos_f,label=et),size=5,col=b2$color)+
+        geom_text(data=b1,aes(y=ifelse(Val<6,8+pos_f,pos_f),label=et),size=5,col=b1$color)+
+        scale_fill_manual(values=c('#A5A5A5','#A74D4B','#F79646','#9BBB59'),
+                          guide=guide_legend(reverse=FALSE))+
+        geom_segment(x=1-0.5/2-0.02,xend=b+0.5/2+0.02,y=0,yend=0,color='#000000',size=0.3)+
+        geom_segment(x=1.5,xend=1.5,y=-(100-e)-25,yend=d+45,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=3.5,xend=3.5,y=-(100-e)-25,yend=d+45,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=5.5,xend=5.5,y=-(100-e)-25,yend=d+45,color='#666666',size=0.4,linetype='dashed')+
+        geom_text(data=niv1,aes(x=orden,y=d+50),label=niv1$estrato,size=5,col="#333333")+
+        geom_text(data=niv,aes(x=orden,y=-(100-e)-25),label=niv$est2,size=4.5,col='#333333')+
+        geom_text(data=eje,aes(x=1-0.5/2-0.5,y=c(d+35,(d+40-(100-e)-25)/2)),label=eje$et,size=4,angle=c(0,90),col='#333333')+
+        theme(axis.title=element_blank(),
+              text=element_text(size=14,color='#333333'),
+              legend.title=element_blank(),
+              legend.position='bottom',
+              legend.direction='horizontal',
+              legend.spacing.x=unit(0.2,'cm'),
+              legend.background=element_blank(),
+              axis.ticks=element_blank(),
+              axis.text=element_blank(),
+              panel.grid=element_blank(),
+              strip.text=element_blank(),
+              strip.background=element_rect(fill='transparent',color=NA),
+              panel.background=element_rect(fill='transparent'),
+              plot.background=element_rect(fill='transparent',color='transparent'))
+      print(grafico)
+      
+      ggsave(paste(guardar,grado,'_',curso,'_estratos.png'),
+             grafico,
+             bg='transparent',
+             width=12,
+             height=7,
+             dpi=1000)
+    } else {
+      grafico<-ggplot(data=NL,aes(x=orden,y=Val))+
+        geom_bar(aes(fill=NL),stat='identity',width=0.5)+
+        geom_text(data=MP,aes(y=d+40,label=et),size=5,col='#333333',position=position_stack(vjust=0.9))+
+        geom_text(data=b4,aes(y=ifelse(Val>-7,-8+pos_f,pos_f),label=et),size=5,col=b4$color)+
+        geom_text(data=b3,aes(y=pos_f,label=et),size=5,col=b3$color)+
+        geom_text(data=b2,aes(y=pos_f,label=et),size=5,col=b2$color)+
+        geom_text(data=b1,aes(y=ifelse(Val<6,8+pos_f,pos_f),label=et),size=5,col=b1$color)+
+        scale_fill_manual(values=c('#A5A5A5','#A74D4B','#F79646','#9BBB59'),
+                          guide=guide_legend(reverse=FALSE))+
+        geom_segment(x=1-0.5/2-0.02,xend=b+0.5/2+0.02,y=0,yend=0,color='#000000',size=0.3)+
+        geom_segment(x=1.5,xend=1.5,y=-(100-e)-25,yend=d+45,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=3.5,xend=3.5,y=-(100-e)-25,yend=d+45,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=5.5,xend=5.5,y=-(100-e)-25,yend=d+45,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=7.5,xend=7.5,y=-(100-e)-25,yend=d+45,color='#666666',size=0.4,linetype='dashed')+
+        geom_text(data=niv1,aes(x=orden,y=d+50),label=niv1$estrato,size=5,col="#333333")+
+        geom_text(data=niv,aes(x=orden,y=-(100-e)-25),label=niv$est2,size=4.5,col='#333333')+
+        geom_text(data=eje,aes(x=1-0.5/2-0.5,y=c(d+35,(d+40-(100-e)-25)/2)),label=eje$et,size=4,angle=c(0,90),col='#333333')+
+        theme(axis.title=element_blank(),
+              text=element_text(size=14,color='#333333'),
+              legend.title=element_blank(),
+              legend.position='bottom',
+              legend.direction='horizontal',
+              legend.spacing.x=unit(0.2,'cm'),
+              legend.background=element_blank(),
+              axis.ticks=element_blank(),
+              axis.text=element_blank(),
+              panel.grid=element_blank(),
+              strip.text=element_blank(),
+              strip.background=element_rect(fill='transparent',color=NA),
+              panel.background=element_rect(fill='transparent'),
+              plot.background=element_rect(fill='transparent',color='transparent'))
+      print(grafico)
+      
+      ggsave(paste(guardar,grado,'_',curso,'_estratos.png'),
+             grafico,
+             bg='transparent',
+             width=12,
+             height=7,
+             dpi=1000)
+    }
+    
+    }
+}

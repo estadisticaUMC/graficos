@@ -1,2 +1,2 @@
 # Funciones para realizar graficos para la presentación de resultados
-Los gráficos más usados en la UMC para la presentación de resultados.
+Las evaluaciones censales (ECE) o evaluaciones muestrales (EM) realizadas por la Oficina de la Medición de la Calidad de los Aprendizajes (UMC) aplicadas a estudiantes de educación básica regular, luego de ser procesadas se emiten resultados, estos resultados se emiten mediante gráficos, los cuales se realizan mediante funciones en R en los cuales se puede mostrar el nivel de logro alcanzado y la medida promedio obtenida por cada estudiante que rindió la prueba.

@@ -157,9 +157,9 @@ graf02<-function(base,curso,grado,nivel,guardar){
     
     niv<-bd1 %>% select(orden,est2); niv$est2<-ifelse(niv$est2=='Público urbano','Público\nurbano',niv$est2)
     aux<-unique(bd1$est1)
-    niv1<-data.frame(orden=c(1,seq(2.5,length(bd1$est2),by=2)),estrato=aux)
+    niv1<-data.frame(orden=seq(1.5,length(MP$est2),by=2),estrato=aux)
     
-    if(length(bd1$est2)==6) {
+    if(length(MP$est2)==8) {
       grafico<-ggplot(data=MP,aes(x=orden,y=med))+
         annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[1],yend=pc[1],color='#A74D4B',size=0.5)+
         annotate('segment',x=0.45,xend=nrow(MP)+1,y=pc[2],yend=pc[2],color='#F79646',size=0.5)+
@@ -167,9 +167,11 @@ graf02<-function(base,curso,grado,nivel,guardar){
         geom_point(pch=16,color='#00CED1',size=4)+
         geom_text(data=MP,aes(y=med+15,label=et),size=5.5,col='#333333')+
         annotate('text',x=niv$orden,y=pc[1]-110,label=niv$est2,color='#333333',hjust=0.5,size=5.5)+
+        annotate('text',x=niv1$orden,y=pc[3]+100,label=niv1$estrato,color='#333333',hjust=0.5,size=5.5)+
         annotate('text',x=0.3,y=pc,label=round2(pc,0),color='#333333',hjust=0.5,size=5.5)+
         geom_segment(x=2.5,xend=2.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
         geom_segment(x=4.5,xend=4.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
+        geom_segment(x=6.5,xend=6.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
         annotate('text',x=nrow(MP)+0.71,y=(pc[1]-100+pc[1])/2,label='Previo al inicio',color='#A6A6A6',hjust=0.5,size=5)+
         annotate('text',x=nrow(MP)+0.84,y=(pc[1]+pc[2])/2,label="En inicio",color='#A74D4B',hjust=0.5,size=5)+
         annotate('text',x=nrow(MP)+0.78,y=(pc[2]+pc[3])/2,label="En proceso",color='#F79646',hjust=0.5,size=5)+
@@ -196,10 +198,10 @@ graf02<-function(base,curso,grado,nivel,guardar){
         geom_point(pch=16,color='#00CED1',size=4)+
         geom_text(data=MP,aes(y=med+15,label=et),size=5.5,col='#333333')+
         annotate('text',x=niv$orden,y=pc[1]-110,label=niv$est2,color='#333333',hjust=0.5,size=5.5)+
+        annotate('text',x=niv1$orden,y=pc[3]+100,label=niv1$estrato,color='#333333',hjust=0.5,size=5.5)+
         annotate('text',x=0.3,y=pc,label=round2(pc,0),color='#333333',hjust=0.5,size=5.5)+
         geom_segment(x=2.5,xend=2.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
         geom_segment(x=4.5,xend=4.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
-        geom_segment(x=6.5,xend=6.5,y=pc[1]-100,yend=pc[3]+100,color='#666666',size=0.4,linetype='dashed')+
         annotate('text',x=nrow(MP)+0.71,y=(pc[1]-100+pc[1])/2,label='Previo al inicio',color='#A6A6A6',hjust=0.5,size=5)+
         annotate('text',x=nrow(MP)+0.84,y=(pc[1]+pc[2])/2,label="En inicio",color='#A74D4B',hjust=0.5,size=5)+
         annotate('text',x=nrow(MP)+0.78,y=(pc[2]+pc[3])/2,label="En proceso",color='#F79646',hjust=0.5,size=5)+
